@@ -1,68 +1,33 @@
 # claude-warmup
 
-> A serverless GitHub Actions workflow that keeps your Claude usage window aligned with your working hours — no server, no local machine required.
+Claude's usage resets on a 5-hour rolling window. I wanted it to reset before I start work. This does that.
 
 ![Workflow status](https://github.com/kong-pd/claude-warmup/actions/workflows/warmup.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-## Why
+## How
 
-Claude's subscription plans meter usage in a rolling **5-hour window** that is anchored to the *first* message of a session. If that window happens to reset at an inconvenient time, you can lose productive hours waiting for it to roll over — or end up setting a midnight alarm to "warm up" the window by hand. (Yes, really. That's the itch this scratches.)
+[cron-job.org](https://cron-job.org) fires a POST to the GitHub API at 07:30, 12:30, 17:30, and 22:30. GitHub Actions runs `claude -p "hi" --model haiku`. That's it.
 
-`claude-warmup` automates the warm-up. It fires a tiny throwaway prompt on a schedule you control, so a fresh 5-hour window is always anchored to the times you actually work — fully hands-off, even while your computer is asleep or powered off.
-
-## How it works
-
-```
-GitHub Actions (cron, UTC)
-      │
-      ├─ installs the Claude Code CLI
-      │
-      └─ runs:  claude -p "hi" --model haiku   ← cheapest possible call
-                      │
-                      └─ anchors a fresh 5-hour usage window
-```
-
-- **Scheduler** — GitHub Actions `schedule` triggers (cron). Runs in the cloud, so it never depends on a local machine being on.
-- **Runtime** — Headless Claude Code (`claude -p`), the official non-interactive mode.
-- **Cost control** — Uses Haiku (the lightest model) with a one-word prompt, so token usage is negligible.
-- **Auth** — A long-lived OAuth token stored as an encrypted GitHub Actions secret; never committed to the repo.
-
-## Schedule
-
-Warm-ups fire **4× per day, spaced 5 hours apart** to give continuous fresh windows across working hours.
-| Local (UTC+8) | UTC   | Cron          |
-|:-------------:|:-----:|:--------------|
-| 07:30         | 23:30 | `30 23 * * *` |
-| 12:30         | 04:30 | `30 4 * * *`  |
-| 17:30         | 09:30 | `30 9 * * *`  |
-| 22:30         | 14:30 | `30 14 * * *` |
-
-> GitHub Actions cron **always runs in UTC** — adjust the offset for your own timezone.
+GitHub Actions has a built-in scheduler but it drifts by 1–3 hours under load. cron-job.org doesn't.
 
 ## Setup
 
-1. **Use this repo as a template** (or fork it).
-2. Generate a long-lived token locally — requires the Claude Code CLI and a Pro/Max subscription:
-   ```bash
-   claude setup-token
-   ```
-3. In your repo, go to **Settings → Secrets and variables → Actions → New repository secret**:
-   - **Name:** `CLAUDE_CODE_OAUTH_TOKEN`
-   - **Value:** the `sk-ant-oat01-…` token from step 2
-4. *(Optional)* Edit the cron times in `.github/workflows/warmup.yml` to match your hours.
-5. Test it: **Actions → claude-warmup → Run workflow**. A green check means you're live.
+**1. Claude OAuth token**
 
-## The workflow
+```bash
+claude setup-token
+```
+
+Requires Claude Code CLI and a Pro/Max subscription. The token prints once, pls save it.
+
+**2. Workflow**
+
+`.github/workflows/warmup.yml`:
 
 ```yaml
 name: claude-warmup
 on:
-  schedule:
-    - cron: '30 23 * * *'   # 07:30 UTC+8
-    - cron: '30 4 * * *'    # 12:30 UTC+8
-    - cron: '30 9 * * *'    # 17:30 UTC+8
-    - cron: '30 14 * * *'   # 22:30 UTC+8
   workflow_dispatch:
 jobs:
   warmup:
@@ -76,17 +41,32 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
-## Notes & limitations
+**3. GitHub secret**
 
-- **Verify it still anchors your window.** As of **June 15, 2026**, Anthropic split programmatic usage (`claude -p`, Agent SDK, CI) into a metered credit pool billed at API rates, separate from interactive chat limits. Depending on your account configuration, a headless warm-up may or may not still anchor your interactive chat window. After the first run, check **Settings → Usage** to confirm the reset time actually shifted.
-- **Intended for personal, individual use** — a convenience utility for a single user's own account, consistent with ordinary individual usage.
-- GitHub **disables scheduled workflows after 60 days** of repo inactivity; an occasional commit keeps them alive.
-- Scheduled runs can be **delayed a few minutes** during peak load — perfectly fine for warm-ups.
+Repo → Settings → Secrets → `CLAUDE_CODE_OAUTH_TOKEN` → paste token from step 1.
 
-## Tech stack
+**4. GitHub PAT**
 
-GitHub Actions · cron · Claude Code CLI (headless) · OAuth · encrypted secrets
+Settings → Developer settings → Personal access tokens → `workflow` scope only.
+
+**5. cron-job.org**
+
+Four jobs, one per time slot:
+
+| Field | Value |
+|---|---|
+| URL | `https://api.github.com/repos/YOUR_USERNAME/claude-warmup/actions/workflows/warmup.yml/dispatches` |
+| Method | POST |
+| `Authorization` | `Bearer YOUR_GITHUB_PAT` |
+| `Content-Type` | `application/json` |
+| Body | `{"ref":"main"}` |
+
+## Caveats
+
+As of June 15, 2026, Anthropic moved programmatic usage (`claude -p`) to a separate credit pool from interactive chat. It's unclear whether this still anchors the chat window. Test it before relying on it: run the workflow manually, then check Settings → Usage for a changed reset time.
+
+Don't commit tokens. If one appears in a screenshot, revoke it.
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+MIT
