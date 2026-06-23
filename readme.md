@@ -7,9 +7,9 @@ Claude's usage resets on a 5-hour rolling window. I wanted it to reset before I 
 
 ## How
 
-[cron-job.org](https://cron-job.org) fires a POST to the GitHub API at 07:30, 12:30, 17:30, and 22:30. GitHub Actions runs `claude -p "hi" --model haiku`. That's it.
+[cron-job.org](https://cron-job.org) fires a POST to the GitHub API at 07:30, 12:30, 17:30, and 22:30. GitHub Actions runs `claude -p "hi" --model haiku`.
 
-GitHub Actions has a built-in scheduler but it drifts by 1–3 hours under load. cron-job.org doesn't.
+GitHub Actions has a built-in scheduler but it drifts by 1–3 hours under load. cron-job.org will not.
 
 ## Setup
 
