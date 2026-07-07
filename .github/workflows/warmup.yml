@@ -1,13 +1,31 @@
-name: claude-warmup
+name: warmup
+
 on:
   workflow_dispatch:
+
 jobs:
-  warmup:
+  claude-warmup:
     runs-on: ubuntu-latest
     steps:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
-      - name: Warm up
+
+      - name: Warm up Claude
         run: claude -p "hi" --model haiku
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  codex-warmup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Warm up Codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: "Say hi briefly and do nothing else."
+          sandbox: read-only
